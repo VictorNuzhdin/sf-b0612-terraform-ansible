@@ -1,0 +1,5 @@
+---
+# vars file for phpfpm
+#
+## Path to webApp sources
+webapp_phpfiles_path: '../../../_webapp/www/'

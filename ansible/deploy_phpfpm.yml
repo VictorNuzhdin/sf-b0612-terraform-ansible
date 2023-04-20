@@ -1,0 +1,12 @@
+---
+# playbook file for PhpFpm hosts
+- hosts: all
+  vars:
+    - remote_login: "ubuntu"
+
+  gather_facts: yes
+  remote_user: "{{ remote_login }}"
+  become: yes
+  roles:
+    - name: users
+    - name: phpfpm

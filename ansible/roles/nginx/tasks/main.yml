@@ -1,0 +1,209 @@
+---
+# tasks file for nginx
+## OS Dependend steps: for Ubuntu 22 only
+- block:
+
+  ## Check is PHP-FPM host public-ip IS set in inventory variables
+  - fail:
+      msg: "You must set Php-Fpm host public ip in inventory/hosts file"
+    when: |
+      ((host_public_ip_phpfpm == '') or (host_public_ip_phpfpm is not defined))
+    tags: always
+
+  ## Print inventory variables
+  - name: Ubuntu(22) - Deploy Nginx - INFO - Print test vars from inventory
+    tags: always
+    debug: # ansible.builtin.debug
+      msg:
+        - 'INFO: PhpFpm host public ip: {{ host_public_ip_phpfpm }}'
+
+  ## Remove Apache2
+  - name: Ubuntu(22) - Deploy Nginx - STEP01 - Stop and disable Apache2 Service
+    tags: remove_apache2
+    service:
+        name: "apache2"
+        state: stopped
+        enabled: false
+    ignore_errors: true
+
+  - name: Ubuntu(22) - Deploy Nginx - STEP02 - Uninstall Apache2 and dependencies (1)
+    tags: remove_apache2
+    apt:
+      pkg:
+        - apache2
+        - apache2-data
+        - apache2-utils
+      state: absent
+    ignore_errors: true
+
+  - name: Ubuntu(22) - Deploy Nginx - STEP03 - Uninstall Apache2 and dependencies (2)
+    tags: remove_apache2
+    shell: apt remove -y --purge apache2 apache2-data apache2-utils
+    ignore_errors: true
+
+  - name: Ubuntu(22) - Deploy Nginx - STEP04 - Uninstall Apache2 and dependencies (3)
+    tags: remove_apache2
+    file:
+      path: '{{ item }}'
+      state: absent
+    with_items:
+      - /var/www/html/index.html
+      - /etc/apache2
+      - /usr/sbin/apache2
+      - /usr/lib/apache2
+      - /usr/share/man/man8/apache2.8.gz
+      - /usr/lib/systemd/system/apache*
+    ignore_errors: true
+
+
+  ## Install Dependencies
+  - name: Ubuntu(22) - Deploy Nginx - STEP10 - Install aptitude
+    tags: install_packages
+    apt:
+      name: aptitude
+      state: latest
+      update_cache: true
+
+  - name: Ubuntu(22) - Deploy Nginx - STEP11 - Install required system packages (1)
+    tags: install_packages
+    apt:
+      pkg:
+        - apt-transport-https
+        - ca-certificates
+        - software-properties-common
+      state: latest
+      update_cache: true
+
+  - name: Ubuntu(22) - Deploy Nginx - STEP20 - Install Nginx
+    tags: install_nginx
+    apt:
+      pkg:
+        - nginx
+      state: latest
+
+  - name: Ubuntu(22) - Deploy Nginx - STEP30 - Remove default index.html
+    tags: install_nginx
+    file:
+      path: /var/www/html/index.html
+      state: absent
+    ignore_errors: true
+
+  - name: Ubuntu(22) - Deploy Nginx - STEP31 - Rename default index.html file
+    tags: install_nginx
+    copy:
+      src: /var/www/html/index.nginx-debian.html
+      dest: /var/www/html/index.html
+      remote_src: yes
+    ignore_errors: true
+
+
+  ## Clean system after packages installation
+  - name: Ubuntu(22) - Deploy Nginx - STEP40 - Remove useless packages and dependencies from the cache
+    ansible.builtin.apt:
+      autoremove: yes   ## Remove dependencies that are no longer required
+      force: yes
+      purge: yes
+    ignore_errors: true
+
+
+  ## Configure Nginx with PHP-FPM (remote)
+  - name: Ubuntu(22) - Deploy Nginx - STEP50 - Configure Nginx for PHP-FPM
+    tags: configure_nginx_remote
+    template:
+      src: ../configs/nginx/configured_nginx_phpfpm_remote.j2
+      dest: /etc/nginx/sites-available/default
+      remote_src: no
+      backup: no
+    ignore_errors: true
+    notify:
+      - nginx_restart
+
+
+  ## Configure Nginx with PHP-FPM (remote) - Copy php files to www directory (sync with PhpFpm)
+  - name: Ubuntu(22) - Deploy Nginx - STEP60 - Copy php and static files to www
+    tags: ['configure_nginx_remote', 'configure_nginx_phpfpm_local']
+    copy:
+      src: "{{ item }}"
+      dest: /var/www/html/
+      remote_src: no
+    with_items:
+      #- ../configs/www/
+      #- ../configs/www_static/
+      - "{{ webapp_phpfiles_path }}"
+      - "{{ webapp_staticfiles_path }}"
+    ignore_errors: true
+
+
+  ## Set firewall rules (open 80 and 443 tcp ports for HTTP(s) incomming connections)
+  ## *by default in YandexCloud Ubuntu images UFW is disabled (Status: inactive)
+  #- name: Ubuntu(22) - Deploy Nginx - Open firewall ports 80,443 tcp
+  #   shell: |
+  #     ufw allow 80/tcp      # allow incoming http traffic
+  #     ufw allow 443/tcp     # allow incoming https traffic
+  #     exit 0
+
+  # End block: start execution condition
+  when:
+    - ansible_facts['distribution'] == "Ubuntu"
+    - ansible_facts['distribution_major_version'] == "22"
+
+
+## OS Independent steps: all OS
+#
+# Debug outputs
+- name: Debug - Get VM hostname
+  #tags: ['install_nginx', 'install_phpfpm']
+  tags: always # never
+  shell: hostname
+  register: vm_hostname
+
+- name: Debug - Get VM public IP-adress  
+  tags: always
+  shell: curl 2ip.ru
+  ## disable warning: 
+  ##    [WARNING]: Consider using the get_url or uri module rather than running 'curl'.
+  args:
+    warn: false
+  register: vm_public_ip
+
+- name: Debug - Get VM OS version
+  tags: always
+  shell: hostnamectl | grep System | awk '{print $3" "$4" "$5}'
+  register: vm_os_version
+
+- name: Debug - Check Apache2 service is NOT Exists and NOT Running
+  tags: always
+  shell: systemctl status apache2 | grep Active
+  ignore_errors: true
+  register: vm_service_apache2_status
+
+- name: Debug - Check Nginx service is Exists and Running
+  tags: always
+  shell: systemctl status nginx | grep Active
+  ignore_errors: true
+  register: vm_service_nginx_status
+
+- name: Debug - Check PHP-FPM service is Exists and Running
+  tags: always
+  shell: systemctl status php*-fpm.service | grep Active
+  ignore_errors: true
+  register: vm_service_phpfpm_status
+
+- name: Debug - Get PHP version
+  tags: always
+  shell: php --version
+  ignore_errors: true
+  register: vm_php_version
+
+## Catch and print outputs (NEW version)
+- name: Debug - Print all messages
+  tags: always
+  debug:
+    msg:
+      - "hostname: {{ vars.vm_hostname.stdout }}"
+      - "public_ip: {{ vars.vm_public_ip.stdout }}"
+      - "apache2_status: {{ vars.vm_service_apache2_status.stdout }}"
+      - "nginx_status: {{ vars.vm_service_nginx_status.stdout }}"
+      - "phpfpm_status: {{ vars.vm_service_phpfpm_status.stdout }}"
+      - "php_version: {{ vars.vm_php_version.stdout }}"
+      #"{{ vars }}"  ## display all fact variables

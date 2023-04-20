@@ -1,0 +1,40 @@
+---
+## userAdd.yml
+#- hosts: terraform_instances
+- hosts: all
+  vars:
+    - remote_login: "ubuntu"  ## root, ubuntu, debian, centos
+    - user_name: "devops"
+    - user_psswd: "$6$Jum.6sxDYJGR2mA4$KTM339CdukedRgVvdHSNJ5WiwfN78hkOropMPmxWaoiM0Y0uJsHcJCK.S5ltVO8xjEAwoqlnmOXFCkkuKiBWh0"
+
+  gather_facts: no
+  remote_user: "{{ remote_login }}"
+  become: true
+
+  tasks:
+  - name: Create a new user named "{{ user_name }}"
+    user:
+      name: "{{ user_name }}"
+      shell: /bin/bash
+      password: "{{ user_psswd }}"
+
+  - name: Add user to the sudoers
+    copy:
+      dest: "/etc/sudoers.d/{{ user_name }}"
+      content: "{{ user_name }}  ALL=(ALL)  NOPASSWD: ALL"
+
+  - name: Deploy SSH Key
+    authorized_key:
+      user: "{{ user_name }}"
+      state: present
+      #key: "{{ lookup('file', '/home/devops/.ssh/id_ed25519.pub)' }}"
+      #ErrorFix: Keyfile not found
+      key: "{{ lookup('file', item) }}"
+    with_fileglob:
+      - /home/devops/.ssh/id_ed25519.pub
+
+  - name: Copy public SSH Key to remote host
+    copy:
+      src: "/home/{{ user_name }}/.ssh/id_ed25519.pub"
+      dest: "/home/{{ user_name }}/.ssh/id_ed25519.pub"
+      remote_src: no

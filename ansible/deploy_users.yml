@@ -1,0 +1,28 @@
+---
+# playbook file for Nginx and PhpFpm hosts
+- hosts: all
+  vars:
+    - remote_login: "ubuntu"
+    ## Users and Groups
+    # encrypted password (user@pass) for "passwd"
+    - user_psswd: '$6$wwiqlxuPsIrlJENg$EwcWmHQEc2UFuW2/vfyrVJgg/qTJzK5bgWt0IykLqjlUEAR4uvWnxklr5tq5XSEt5lnYTwwtyp0lNKgJyPxgl1'
+    - user_shell: '/bin/bash'
+    - sudo_group: 'superusers'
+    #- ssh_pub_key: '/home/devops/.ssh/id_ed25519.pub'
+    #- ssh_pub_key_path: '/home/user/.ssh/id_ed25519.pub'         ## Persmission Error: could not locate file in lookup: /home/user/.ssh/id_ed25519.pub
+    #- ssh_prv_key_path: '/home/user/.ssh/id_ed25519'             ## Persmission Error: could not locate file in lookup: /home/user/.ssh/id_ed25519
+    - ssh_pub_key_path: '/home/devops/.ssh/user/id_ed25519.pub'
+    - ssh_prv_key_path: '/home/user/.ssh/id_ed25519'
+    - ssh_pub_key_str: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF6Uh/ubNXuoja46xtevZnmQ68OID3D0I5QStuQTuRul user@userver'
+    - users:
+      #- user1
+      #- user2
+      - { username: "user1", usergroup: "superusers" }
+      - { username: "user2", usergroup: "superusers" }
+
+  gather_facts: no
+  remote_user: "{{ remote_login }}"
+  become: yes
+  become_user: root
+  roles:
+    - name: users

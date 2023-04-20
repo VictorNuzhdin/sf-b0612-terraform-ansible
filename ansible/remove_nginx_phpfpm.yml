@@ -1,0 +1,145 @@
+---
+# playbook file for Nginx hosts
+- hosts: all
+  vars:
+    - remote_login: "ubuntu"
+
+  gather_facts: no
+  remote_user: "{{ remote_login }}"
+  become: yes
+  become_method: sudo
+
+  tasks:
+  ## Stop Services
+  - name: Ubuntu(22) - STEP01 - Stop PHP-FPM Service
+    tags: remove_phpfpm
+    service:
+        #name: "php*-fpm.service"    ## ERROR: This module does not currently support using glob patterns, found '*'
+        name: "php8.2-fpm.service"
+        state: stopped
+        #enabled: false
+
+  - name: Ubuntu(22) - STEP02 - Stop Nginx Service
+    tags: remove_phpfpm
+    service:
+        name: "nginx"
+        state: stopped
+    ignore_errors: true
+
+  # Remove PHP-FPM
+  - name: Ubuntu(22) - STEP11 - Remove PHP-FPM (1)
+    tags: remove_phpfpm
+    apt:
+      pkg:
+        - php
+        - php-cli
+        - php-fpm
+        - php-json
+        - php-mysql
+        - php-zip
+        - php-gd
+        - php-mbstring
+        - php-curl
+        - php-xml
+        - php-pear
+        - php-bcmath
+      state: absent
+      autoclean: yes    ## Remove useless packages from the cache
+      autoremove: yes   ## Remove dependencies that are no longer required
+    notify:
+      - nginx_restart
+
+  - name: Ubuntu(22) - STEP12 - Remove PHP-FPM (2)
+    tags: remove_phpfpm
+    shell: apt remove -y php && apt autoremove -y
+
+  - name: Ubuntu(22) - STEP13 - Remove PHP-FPM (3)
+    tags: remove_phpfpm
+    file:
+      path: # /etc/php/8.2
+        - /etc/php
+        - /usr/bin/php
+        - /usr/lib/php
+        - /usr/share/php
+        - /usr/share/man/man1/php.1.gz
+      state: absent
+ 
+  #- name: Ubuntu(22) - STEP14 - Remove PHP-FPM (4)
+  #  tags: remove_phpfpm
+  #  shell: rm -rf /var/www/html/info.php
+  #  ## disable warning: 
+  #  ##    [WARNING]: Consider using the file module with state=absent rather than running 'rm'.
+  #  args:
+  #    warn: false
+
+  - name: Ubuntu(22) - STEP14 - Remove PHP-FPM (4)
+    tags: remove_phpfpm
+    shell: /bin/rm -rf /var/www/html/* /var/www/html/.*
+    args:
+      warn: false
+    ignore_errors: true
+
+  ## Remove Nginx
+  - name: Ubuntu(22) - STEP21 - Remove Nginx (1)
+    tags: remove_nginx
+    apt:
+      pkg:
+        - nginx
+      state: absent
+      autoclean: yes    ## Remove useless packages from the cache
+      autoremove: yes   ## Remove dependencies that are no longer required
+
+  - name: Ubuntu(22) - STEP22 - Remove Nginx (2)
+    tags: remove_nginx
+    file:
+      path: 
+        - /etc/nginx
+      state: absent
+
+
+  ## Check versions
+  - name: Debug - Check Apache2 service is Removed
+    tags: ['remove_phpfpm', 'remove_nginx']
+    shell: systemctl status apache2 | grep Active
+    ignore_errors: true
+    register: vm_service_apache2_status
+
+  - name: Debug - Check Nginx service is Removed
+    tags: ['remove_phpfpm', 'remove_nginx']
+    shell: systemctl status nginx | grep Active
+    ignore_errors: true
+    register: vm_service_nginx_status
+
+  - name: Debug - Check PHP-FPM service is Removed
+    tags: ['remove_phpfpm', 'remove_nginx']
+    shell: systemctl status php*-fpm.service | grep Active
+    ignore_errors: true
+    register: vm_service_phpfpm_status
+
+  - name: Debug - Get PHP version
+    tags: ['remove_phpfpm', 'remove_nginx']
+    shell: php --version
+    ignore_errors: true
+    register: vm_php_version
+
+  ## Catch and print outputs
+  - debug: var=vm_service_apache2_status.stdout_lines
+  - debug: var=vm_service_nginx_status.stdout_lines
+  - debug: var=vm_service_phpfpm_status.stdout_lines
+  - debug: var=vm_php_version.stdout_lines
+
+
+  ## Handler listeners
+  handlers:
+  ## Service Nginx stop
+  - name: nginx_stop
+    service:
+      name: nginx
+      state: stopped
+    ignore_errors: true
+  ## Service Nginx restart
+  - name: nginx_restart
+    service:
+      name: nginx
+      state: restarted
+    ignore_errors: true

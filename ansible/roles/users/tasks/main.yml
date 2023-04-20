@@ -1,0 +1,49 @@
+---
+# tasks file for users
+#
+## Create Group "superusers"
+- name: Ubuntu(22) - Deploy Users - STEP01 - Create a new user group named "superusers"
+  group:
+    name: superusers
+    state: present
+
+## Apply sudo permissions to "superusers" group
+- name: Ubuntu(22) - Deploy Users - STEP02 - Set sudo permission to "superusers" group
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: present
+    regexp: "^# %wheel"
+    line: "%{{ sudo_group }} ALL=(ALL) NOPASSWD: ALL"
+
+## Create users (listed in playbook vars) and add them to "superusers" group
+- name: Ubuntu(22) - Deploy Users - STEP03 - Create a new users from list defined in (playbook) vars
+  user:
+    name: "{{ item.username }}"
+    password: "{{ user_psswd }}"
+    shell: "{{ user_shell }}"
+    group: "{{ sudo_group }}"
+    state: "present"
+  with_items: 
+    - "{{ users }}"
+
+## Add public key to "authorized_keys" on remote host
+- name: Ubuntu(22) - Deploy Users - STEP04 - Add public key to "authorized_keys" on remote host
+  authorized_key:
+    user: "{{ item.username }}"
+    key: "{{ lookup('file', '{{ ssh_pub_key_path }}') }}"
+    state: present
+  with_items:
+    - "{{ users }}"
+
+## Copy public key file to user home on remote host
+- name: Ubuntu(22) - Deploy Users - STEP05 - Copy public key to user home on remote host
+  become: true
+  copy: 
+    src: "{{ ssh_pub_key_path }}"
+    dest: "/home/{{ item.username }}/.ssh/id_ed25519.pub"
+    owner: "{{ item.username }}"
+    group: "{{ item.usergroup }}"
+    mode: 0600
+    remote_src: no
+  with_items:
+    - "{{ users }}"

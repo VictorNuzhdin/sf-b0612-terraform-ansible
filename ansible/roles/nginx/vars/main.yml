@@ -1,0 +1,8 @@
+---
+# vars file for nginx
+#
+## Path to webApp sources
+#webapp_phpfiles_path: '../configs/www/'
+#webapp_staticfiles_path: '../configs/www_static/'
+webapp_phpfiles_path: '../../../_webapp/www/'
+webapp_staticfiles_path: '../../../_webapp/www_static/'

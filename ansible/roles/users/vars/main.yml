@@ -1,0 +1,13 @@
+---
+# vars file for users
+#
+## Users and Groups
+# encrypted password (user@pass) for "passwd"
+user_psswd: '$6$wwiqlxuPsIrlJENg$EwcWmHQEc2UFuW2/vfyrVJgg/qTJzK5bgWt0IykLqjlUEAR4uvWnxklr5tq5XSEt5lnYTwwtyp0lNKgJyPxgl1'
+user_shell: '/bin/bash'
+sudo_group: 'superusers'
+ssh_pub_key_path: '/home/devops/.ssh/user/id_ed25519.pub'
+ssh_prv_key_path: '/home/user/.ssh/id_ed25519'
+users:
+  - { username: "user1", usergroup: "superusers" }
+  - { username: "user2", usergroup: "superusers" }
