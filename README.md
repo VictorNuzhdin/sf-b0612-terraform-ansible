@@ -1,4 +1,4 @@
-# sf-b612-terraform-ansible
+# sf-b0612-terraform-ansible
 For Skill Factory study project (B6, Webinar practice)
 
 <br>
